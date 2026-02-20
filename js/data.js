@@ -50,12 +50,15 @@ const DB = {
     },
 
     // --- UTILS ---
-    get(key) { return JSON.parse(localStorage.getItem(key) || '[]'); },
+    get(key) {
+        const val = localStorage.getItem(key);
+        return val ? JSON.parse(val) : null;
+    },
     set(key, data) { localStorage.setItem(key, JSON.stringify(data)); },
 
     // --- AUTH ---
     login(email, password) {
-        const users = DB.get(DB.KEYS.USERS);
+        const users = DB.get(DB.KEYS.USERS) || [];
         const user = users.find(u => u.email === email && u.password === password);
         if (user) {
             DB.set(DB.KEYS.SESSION, user);
@@ -65,7 +68,7 @@ const DB = {
     },
 
     register(user) {
-        const users = DB.get(DB.KEYS.USERS);
+        const users = DB.get(DB.KEYS.USERS) || [];
         if (users.find(u => u.email === user.email)) {
             throw new Error("El correo ya está registrado");
         }
