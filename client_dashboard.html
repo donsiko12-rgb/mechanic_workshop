@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Cliente - AutoFix</title>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- QRCode Lib -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <div class="dashboard-layout">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="brand">
+                <i class="ph ph-steering-wheel" style="font-size: 1.5rem; color: var(--primary);"></i>
+                <h1 style="font-size: 1.2rem;">AutoFix <span style="font-weight:400; color: var(--text-muted);">|
+                        Cliente</span></h1>
+            </div>
+            <div style="display:flex; align-items:center; gap:1rem;">
+                <span id="user-name" style="font-size:0.9rem; font-weight:500;">Usuario</span>
+                <button class="btn btn-outline" onclick="DB.logout()" style="padding: 0.5rem 1rem; font-size:0.8rem;">
+                    <i class="ph ph-sign-out"></i> Salir
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="container">
+
+                <div class="grid-2">
+                    <!-- Left: New Booking -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 1.5rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i class="ph ph-plus-circle"></i> Nueva Cita
+                        </h2>
+
+                        <form id="booking-form">
+                            <!-- 1. Service -->
+                            <div class="form-group">
+                                <label>Selecciona Servicio</label>
+                                <select id="service-select" class="input-wrapper"
+                                    style="width:100%; padding:0.75rem; border-radius:var(--radius); border:1px solid var(--border);"
+                                    required>
+                                    <option value="">Cargando servicios...</option>
+                                </select>
+                            </div>
+
+                            <!-- 2. Date -->
+                            <div class="form-group">
+                                <label>Fecha Deseada</label>
+                                <input type="date" id="date-input"
+                                    style="width:100%; padding:0.75rem; border-radius:var(--radius); border:1px solid var(--border);"
+                                    required>
+                            </div>
+
+                            <!-- 3. Time Slots -->
+                            <div class="form-group">
+                                <label>Horarios Disponibles <span id="slots-info"
+                                        style="font-weight:400; font-size:0.8rem; color:var(--text-muted);">(Selecciona
+                                        fecha)</span></label>
+                                <div id="slots-container" class="slots-grid">
+                                    <!-- Slots injected here -->
+                                </div>
+                                <input type="hidden" id="selected-time" required>
+                                <div id="time-error"
+                                    style="color:var(--danger); font-size:0.8rem; margin-top:0.5rem; display:none;">
+                                    Este horario ya no está disponible.
+                                </div>
+                            </div>
+
+                            <!-- 4. Vehicle -->
+                            <div class="form-group">
+                                <label>Datos del Vehículo</label>
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;">
+                                    <input type="text" id="veh-make" placeholder="Marca (ej. Toyota)"
+                                        style="padding:0.5rem; border-radius:var(--radius); border:1px solid var(--border);"
+                                        required>
+                                    <input type="text" id="veh-model" placeholder="Modelo (ej. Corolla)"
+                                        style="padding:0.5rem; border-radius:var(--radius); border:1px solid var(--border);"
+                                        required>
+                                </div>
+                                <input type="text" id="veh-plate" placeholder="Placa / Matrícula"
+                                    style="width:100%; margin-top:0.5rem; padding:0.5rem; border-radius:var(--radius); border:1px solid var(--border);"
+                                    required>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block">
+                                Confirmar Reserva
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Right: History -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 1.5rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i class="ph ph-clock-counter-clockwise"></i> Mis Citas
+                        </h2>
+                        <div id="appointments-list" style="display:flex; flex-direction:column; gap:1rem;">
+                            <p style="text-align:center; color:var(--text-muted);">Cargando citas...</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="success-modal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index:1000;">
+        <div class="card" style="width:90%; max-width:400px; text-align:center;">
+            <div style="color:var(--success); font-size:3rem; margin-bottom:1rem;">
+                <i class="ph ph-check-circle"></i>
+            </div>
+            <h2>¡Cita Confirmada!</h2>
+            <p style="color:var(--text-muted); margin-bottom:1rem;">Tu folio es: <b id="folio-display">TM-2026-XXXX</b>
+            </p>
+
+            <div id="qrcode"></div>
+            <p style="font-size:0.8rem; color:var(--text-muted); margin-top:1rem;">Presenta este código al llegar al
+                taller.</p>
+
+            <button class="btn btn-primary btn-block" style="margin-top:1.5rem;"
+                onclick="location.reload()">Aceptar</button>
+        </div>
+    </div>
+
+    <script src="js/data.js"></script>
+    <script src="js/client.js"></script>
+</body>
+
+</html>

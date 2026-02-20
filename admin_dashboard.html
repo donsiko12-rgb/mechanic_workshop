@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Admin - AutoFix</title>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- QRCode Lib (For viewing QRs if needed) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .status-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-confirmed {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-completed {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-cancelled {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 0.25rem;
+        }
+
+        .action-btn:hover {
+            background: var(--border);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="dashboard-layout">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="brand">
+                <i class="ph ph-wrench" style="font-size: 1.5rem; color: var(--primary);"></i>
+                <h1 style="font-size: 1.2rem;">AutoFix <span style="font-weight:700; color: var(--text-main);">|
+                        ADMIN</span></h1>
+            </div>
+            <div style="display:flex; align-items:center; gap:1rem;">
+                <span id="user-name" style="font-size:0.9rem; font-weight:500;">Administrador</span>
+                <button class="btn btn-outline" onclick="DB.logout()" style="padding: 0.5rem 1rem; font-size:0.8rem;">
+                    <i class="ph ph-sign-out"></i> Salir
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="container" style="max-width: 1200px;">
+
+                <!-- Filters -->
+                <div class="card" style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Filtrar por
+                            Fecha</label>
+                        <input type="date" id="filter-date"
+                            style="padding:0.5rem; border-radius:var(--radius); border:1px solid var(--border);">
+                        <button class="btn btn-outline" onclick="clearDate()" style="padding:0.5rem;">Hoy</button>
+                    </div>
+
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Estado</label>
+                        <select id="filter-status"
+                            style="padding:0.5rem; border-radius:var(--radius); border:1px solid var(--border); width:100%;">
+                            <option value="all">Todos</option>
+                            <option value="confirmed">Confirmados</option>
+                            <option value="completed">Completados</option>
+                            <option value="cancelled">Cancelados</option>
+                        </select>
+                    </div>
+
+                    <div style="align-self:end;">
+                        <button class="btn btn-primary" onclick="loadAppointments()">
+                            <i class="ph ph-arrows-clockwise"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="grid-2" style="grid-template-columns: repeat(3, 1fr); margin-bottom:1.5rem;">
+                    <div class="card" style="padding:1rem; text-align:center;">
+                        <h3 style="font-size:0.9rem; color:var(--text-muted);">Citas Hoy</h3>
+                        <p id="stat-today" style="font-size:2rem; font-weight:700; color:var(--primary);">0</p>
+                    </div>
+                    <div class="card" style="padding:1rem; text-align:center;">
+                        <h3 style="font-size:0.9rem; color:var(--text-muted);">Pendientes</h3>
+                        <p id="stat-pending" style="font-size:2rem; font-weight:700; color:var(--warning);">0</p>
+                    </div>
+                    <div class="card" style="padding:1rem; text-align:center;">
+                        <h3 style="font-size:0.9rem; color:var(--text-muted);">Ingresos (Est.)</h3>
+                        <p id="stat-revenue" style="font-size:2rem; font-weight:700; color:var(--success);">$0</p>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="card" style="padding:0;">
+                    <div style="overflow-x:auto;">
+                        <table id="appointments-table">
+                            <thead>
+                                <tr>
+                                    <th>Folio</th>
+                                    <th>Cliente / Vehículo</th>
+                                    <th>Servicio</th>
+                                    <th>Fecha / Hora</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Rows injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="no-data" style="padding:2rem; text-align:center; color:var(--text-muted); display:none;">
+                        No se encontraron citas.
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- QR Viewer Modal -->
+    <div id="qr-modal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index:1000;">
+        <div class="card" style="width:300px; text-align:center; position:relative;">
+            <button onclick="document.getElementById('qr-modal').style.display='none'"
+                style="position:absolute; top:10px; right:10px; border:none; background:none; cursor:pointer;"><i
+                    class="ph ph-x" style="font-size:1.5rem;"></i></button>
+            <h3>Código QR</h3>
+            <div id="admin-qrcode" style="display:flex; justify-content:center; margin:1rem 0;"></div>
+            <p id="qr-folio" style="font-size:0.8rem; color:var(--text-muted);"></p>
+        </div>
+    </div>
+
+    <script src="js/data.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+
+</html>
