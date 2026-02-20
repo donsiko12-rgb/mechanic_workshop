@@ -1,192 +1,285 @@
+import { auth, db } from './firebase-config.js';
+import {
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+import {
+    collection,
+    doc,
+    setDoc,
+    getDoc,
+    getDocs,
+    addDoc,
+    query,
+    where,
+    orderBy,
+    updateDoc
+} from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+
 /**
- * AutoFix Manager - Local Data Layer
- * Handles LocalStorage "Database"
+ * AutoFix Manager - Firebase Data Layer
  */
 
 const DB = {
-    // Keys
-    KEYS: {
-        USERS: 'autofix_users',
-        SERVICES: 'autofix_services',
-        APPOINTMENTS: 'autofix_appointments',
-        SETTINGS: 'autofix_settings',
-        SESSION: 'autofix_session'
+    // Current user state
+    currentUser: null,
+    settings: {
+        openingTime: "09:00",
+        closingTime: "18:00",
+        slotInterval: 30 // minutes
     },
 
-    // Initialize Data
-    init() {
-        if (!localStorage.getItem(DB.KEYS.SETTINGS)) {
-            localStorage.setItem(DB.KEYS.SETTINGS, JSON.stringify({
-                openingTime: "09:00",
-                closingTime: "18:00",
-                slotInterval: 30 // minutes
-            }));
-        }
-
-        if (!localStorage.getItem(DB.KEYS.SERVICES)) {
-            localStorage.setItem(DB.KEYS.SERVICES, JSON.stringify([
-                { id: 1, name: "Cambio de Aceite", duration: 30, price: 500, icon: "drop" },
-                { id: 2, name: "Afinación Mayor", duration: 120, price: 2500, icon: "engine" },
-                { id: 3, name: "Frenos", duration: 60, price: 1200, icon: "warning-circle" },
-                { id: 4, name: "Diagnóstico General", duration: 30, price: 300, icon: "stethoscope" }
-            ]));
-        }
-
-        // Initialize Users (Admin + Demo Client)
-        let users = DB.get(DB.KEYS.USERS) || [];
-        let usersChanged = false;
-
-        // Ensure Admin
-        if (!users.find(u => u.email === 'admin@autofix.com')) {
-            users.push({
-                id: "admin_01",
-                email: "admin@autofix.com",
-                password: "admin",
-                name: "Administrador",
-                role: "admin"
-            });
-            usersChanged = true;
-        }
-
-        // Ensure Demo Client
-        if (!users.find(u => u.email === 'cliente@demo.com')) {
-            users.push({
-                id: "client_demo",
-                email: "cliente@demo.com",
-                password: "123",
-                name: "Cliente Demo",
-                phone: "555-9999",
-                role: "client"
-            });
-            usersChanged = true;
-        }
-
-        if (usersChanged) {
-            DB.set(DB.KEYS.USERS, users);
-        }
-
-        if (!localStorage.getItem(DB.KEYS.APPOINTMENTS)) {
-            localStorage.setItem(DB.KEYS.APPOINTMENTS, JSON.stringify([]));
-        }
+    // Initialize Authentication Listener
+    initAuth(callback) {
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // Fetch user data from Firestore
+                const userDoc = await getDoc(doc(db, "users", user.uid));
+                if (userDoc.exists()) {
+                    DB.currentUser = { id: user.uid, ...userDoc.data() };
+                } else {
+                    DB.currentUser = { id: user.uid, email: user.email, role: 'client' };
+                }
+            } else {
+                DB.currentUser = null;
+            }
+            if (callback) callback(DB.currentUser);
+        });
     },
-
-    // --- UTILS ---
-    get(key) {
-        const val = localStorage.getItem(key);
-        return val ? JSON.parse(val) : null;
-    },
-    set(key, data) { localStorage.setItem(key, JSON.stringify(data)); },
 
     // --- AUTH ---
-    login(email, password) {
-        const users = DB.get(DB.KEYS.USERS) || [];
-        const user = users.find(u => u.email === email && u.password === password);
-        if (user) {
-            DB.set(DB.KEYS.SESSION, user);
-            return user;
+    async login(email, password) {
+        try {
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+
+            // Get role
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists()) {
+                return { id: user.uid, ...userDoc.data() };
+            }
+            return { id: user.uid, email: user.email, role: 'client' };
+        } catch (error) {
+            console.error("Login error:", error);
+            throw new Error("Credenciales incorrectas o error de red.");
         }
-        return null;
     },
 
-    register(user) {
-        const users = DB.get(DB.KEYS.USERS) || [];
-        if (users.find(u => u.email === user.email)) {
-            throw new Error("El correo ya está registrado");
+    async register(userData) {
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
+            const user = userCredential.user;
+
+            // Save additional data to Firestore
+            const newUser = {
+                email: userData.email,
+                name: userData.name,
+                phone: userData.phone || '',
+                role: 'client'
+            };
+
+            await setDoc(doc(db, "users", user.uid), newUser);
+            return { id: user.uid, ...newUser };
+        } catch (error) {
+            console.error("Register error:", error);
+            if (error.code === 'auth/email-already-in-use') {
+                throw new Error("El correo ya está registrado");
+            }
+            throw new Error("Error al registrar: " + error.message);
         }
-        const newUser = { ...user, id: 'u_' + Date.now(), role: 'client' };
-        users.push(newUser);
-        DB.set(DB.KEYS.USERS, users);
-        DB.set(DB.KEYS.SESSION, newUser);
-        return newUser;
     },
 
-    logout() {
-        localStorage.removeItem(DB.KEYS.SESSION);
-        window.location.href = 'index.html';
+    async logout() {
+        try {
+            await signOut(auth);
+            window.location.href = 'index.html';
+        } catch (error) {
+            console.error("Logout error:", error);
+        }
     },
 
     getCurrentUser() {
-        return DB.get(DB.KEYS.SESSION);
+        return DB.currentUser;
     },
 
     // --- SERVICES ---
-    getServices() { return DB.get(DB.KEYS.SERVICES); },
+    async getServices() {
+        // We can either fetch from Firestore or keep them hardcoded for MVP
+        // Let's hardcode for fewer reads if they don't change often, 
+        // but for a real app we'd fetch from Firestore:
+        try {
+            const querySnapshot = await getDocs(collection(db, "services"));
+            if (querySnapshot.empty) {
+                // Seed initial services if empty
+                const defaultServices = [
+                    { id: 1, name: "Cambio de Aceite", duration: 30, price: 500, icon: "drop" },
+                    { id: 2, name: "Afinación Mayor", duration: 120, price: 2500, icon: "engine" },
+                    { id: 3, name: "Frenos", duration: 60, price: 1200, icon: "warning-circle" },
+                    { id: 4, name: "Diagnóstico General", duration: 30, price: 300, icon: "stethoscope" }
+                ];
+
+                for (const s of defaultServices) {
+                    await setDoc(doc(db, "services", s.id.toString()), s);
+                }
+                return defaultServices;
+            }
+
+            const services = [];
+            querySnapshot.forEach((doc) => {
+                services.push({ id: parseInt(doc.id), ...doc.data() });
+            });
+            return services;
+        } catch (error) {
+            console.error("Error getting services:", error);
+            return [];
+        }
+    },
+
+    // Admin specific - get all users to map IDs to names
+    async getAllUsers() {
+        try {
+            const querySnapshot = await getDocs(collection(db, "users"));
+            const users = [];
+            querySnapshot.forEach((doc) => {
+                users.push({ id: doc.id, ...doc.data() });
+            });
+            return users;
+        } catch (error) {
+            console.error("Error getting users:", error);
+            return [];
+        }
+    },
 
     // --- APPOINTMENTS & AVAILABILITY ---
 
     // Core function: Generate slots for a date
-    getSlotsForDate(dateStr, serviceDuration) {
-        const settings = JSON.parse(localStorage.getItem(DB.KEYS.SETTINGS));
-        const appointments = DB.get(DB.KEYS.APPOINTMENTS).filter(a => a.date === dateStr && a.status !== 'cancelled');
+    async getSlotsForDate(dateStr, serviceDuration) {
+        try {
+            // Get appointments for that day from Firestore
+            const q = query(collection(db, "appointments"),
+                where("date", "==", dateStr),
+                where("status", "in", ["confirmed", "completed"])
+            );
 
-        const slots = [];
-        const startMin = DB.timeToMinutes(settings.openingTime);
-        const endMin = DB.timeToMinutes(settings.closingTime);
-        const interval = settings.slotInterval;
+            const querySnapshot = await getDocs(q);
+            const appointments = [];
+            querySnapshot.forEach((doc) => {
+                appointments.push(doc.data());
+            });
 
-        // Loop through the day based on interval
-        for (let time = startMin; time + serviceDuration <= endMin; time += interval) {
-            const timeStr = DB.minutesToTime(time);
-            const endTime = time + serviceDuration;
+            const slots = [];
+            const startMin = DB.timeToMinutes(DB.settings.openingTime);
+            const endMin = DB.timeToMinutes(DB.settings.closingTime);
+            const interval = DB.settings.slotInterval;
 
-            // Check collision with existing appointments
-            let isBooked = false;
-            for (const app of appointments) {
-                const appStart = DB.timeToMinutes(app.time);
-                const appEnd = appStart + app.duration;
+            // Loop through the day based on interval
+            for (let time = startMin; time + serviceDuration <= endMin; time += interval) {
+                const timeStr = DB.minutesToTime(time);
+                const endTime = time + serviceDuration;
 
-                // Collision Logic: (StartA < EndB) and (EndA > StartB)
-                if (time < appEnd && endTime > appStart) {
-                    isBooked = true;
-                    break;
+                // Check collision with existing appointments
+                let isBooked = false;
+                for (const app of appointments) {
+                    const appStart = DB.timeToMinutes(app.time);
+                    const appEnd = appStart + app.duration;
+
+                    // Collision Logic: (StartA < EndB) and (EndA > StartB)
+                    if (time < appEnd && endTime > appStart) {
+                        isBooked = true;
+                        break;
+                    }
                 }
+
+                slots.push({
+                    time: timeStr,
+                    available: !isBooked
+                });
+            }
+            return slots;
+        } catch (error) {
+            console.error("Error generating slots:", error);
+            return [];
+        }
+    },
+
+    async createAppointment(appointmentData) {
+        try {
+            // Double check availability to prevent race conditions
+            const slots = await DB.getSlotsForDate(appointmentData.date, appointmentData.duration);
+            const requestedSlot = slots.find(s => s.time === appointmentData.time);
+
+            if (!requestedSlot || !requestedSlot.available) {
+                throw new Error("Este horario ya fue reservado, por favor selecciona otro.");
             }
 
-            slots.push({
-                time: timeStr,
-                available: !isBooked
+            const newAppId = 'TM-' + new Date().getFullYear() + '-' + Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+
+            const newApp = {
+                id: newAppId,
+                ...appointmentData,
+                status: 'confirmed',
+                createdAt: new Date().toISOString()
+            };
+
+            await setDoc(doc(db, "appointments", newAppId), newApp);
+            return newApp;
+        } catch (error) {
+            console.error("Error creating appointment:", error);
+            throw error;
+        }
+    },
+
+    async getMyAppointments(userId) {
+        try {
+            const q = query(
+                collection(db, "appointments"),
+                where("clientId", "==", userId)
+            );
+
+            // Note: ordering by createdAt might require an index in Firestore. 
+            // We sort client-side for simplicity if no index exists.
+            const querySnapshot = await getDocs(q);
+            const apps = [];
+            querySnapshot.forEach((doc) => {
+                apps.push(doc.data());
             });
+
+            // Sort client-side descending
+            return apps.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        } catch (error) {
+            console.error("Error getting my appointments:", error);
+            return [];
         }
-        return slots;
     },
 
-    createAppointment(appointmentData) {
-        // Double check availability to prevent race conditions (simulated)
-        const slots = DB.getSlotsForDate(appointmentData.date, appointmentData.duration);
-        const requestedSlot = slots.find(s => s.time === appointmentData.time);
+    async getAllAppointments() {
+        try {
+            // Order by requires index, doing client side for now
+            const querySnapshot = await getDocs(collection(db, "appointments"));
+            const apps = [];
+            querySnapshot.forEach((doc) => {
+                apps.push(doc.data());
+            });
 
-        if (!requestedSlot || !requestedSlot.available) {
-            throw new Error("Este horario ya fue reservado, por favor selecciona otro.");
+            return apps.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        } catch (error) {
+            console.error("Error getting all appointments:", error);
+            return [];
         }
-
-        const newApp = {
-            id: 'TM-' + new Date().getFullYear() + '-' + Math.floor(Math.random() * 10000).toString().padStart(4, '0'),
-            ...appointmentData,
-            status: 'confirmed',
-            createdAt: new Date().toISOString()
-        };
-
-        const appointments = DB.get(DB.KEYS.APPOINTMENTS);
-        appointments.push(newApp);
-        DB.set(DB.KEYS.APPOINTMENTS, appointments);
-        return newApp;
     },
 
-    getMyAppointments(userId) {
-        const apps = DB.get(DB.KEYS.APPOINTMENTS);
-        return apps.filter(a => a.clientId === userId).reverse();
-    },
-
-    getAllAppointments() {
-        return DB.get(DB.KEYS.APPOINTMENTS).reverse();
-    },
-
-    updateAppointmentStatus(id, status) {
-        const apps = DB.get(DB.KEYS.APPOINTMENTS);
-        const idx = apps.findIndex(a => a.id === id);
-        if (idx !== -1) {
-            apps[idx].status = status;
-            DB.set(DB.KEYS.APPOINTMENTS, apps);
+    async updateAppointmentStatus(id, status) {
+        try {
+            const appRef = doc(db, "appointments", id);
+            await updateDoc(appRef, {
+                status: status
+            });
+            return true;
+        } catch (error) {
+            console.error("Error updating status:", error);
+            return false;
         }
     },
 
@@ -203,5 +296,7 @@ const DB = {
     }
 };
 
-// Initialize on load
-DB.init();
+// Expose DB to global scope since HTML uses `onclick="DB.logout()"`
+window.DB = DB;
+
+export default DB;

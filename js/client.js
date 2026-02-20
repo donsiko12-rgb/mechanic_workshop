@@ -1,9 +1,4 @@
-
-// Check Auth
-const currentUser = DB.getCurrentUser();
-if (!currentUser || currentUser.role !== 'client') {
-    window.location.href = 'index.html';
-}
+import DB from './data.js';
 
 // DOM Elements
 const userNameSpan = document.getElementById('user-name');
@@ -18,24 +13,38 @@ const folioDisplay = document.getElementById('folio-display');
 const qrContainer = document.getElementById('qrcode');
 const timeError = document.getElementById('time-error');
 
-// Init
-userNameSpan.textContent = currentUser.name;
-const today = new Date().toISOString().split('T')[0];
-dateInput.min = today;
-dateInput.value = today;
+let services = [];
+let currentUser = null;
 
-// Load Services
-const services = DB.getServices();
-serviceSelect.innerHTML = '<option value="">Selecciona un servicio...</option>';
-services.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s.id;
-    opt.textContent = `${s.name} (${s.duration} min) - $${s.price}`;
-    serviceSelect.appendChild(opt);
+// Init Auth
+DB.initAuth(async (user) => {
+    if (!user || user.role !== 'client') {
+        window.location.href = 'index.html';
+        return;
+    }
+
+    currentUser = user;
+    userNameSpan.textContent = currentUser.name || currentUser.email;
+
+    // Init form
+    const today = new Date().toISOString().split('T')[0];
+    dateInput.min = today;
+    dateInput.value = today;
+
+    // Load Services from DB
+    services = await DB.getServices();
+    serviceSelect.innerHTML = '<option value="">Selecciona un servicio...</option>';
+    services.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.duration} min) - $${s.price}`;
+        serviceSelect.appendChild(opt);
+    });
+
+    // Load History
+    renderHistory();
 });
 
-// Load History
-renderHistory();
 
 // --- EVENTS ---
 
@@ -43,7 +52,7 @@ renderHistory();
 dateInput.addEventListener('change', loadSlots);
 serviceSelect.addEventListener('change', loadSlots); // Service duration affects slots
 
-function loadSlots() {
+async function loadSlots() {
     const date = dateInput.value;
     const serviceId = parseInt(serviceSelect.value);
 
@@ -52,8 +61,10 @@ function loadSlots() {
         return;
     }
 
+    slotsContainer.innerHTML = '<p style="grid-column:1/-1; text-align:center;">Cargando horarios...</p>';
+
     const service = services.find(s => s.id === serviceId);
-    const slots = DB.getSlotsForDate(date, service.duration);
+    const slots = await DB.getSlotsForDate(date, service.duration);
 
     slotsContainer.innerHTML = '';
 
@@ -75,10 +86,7 @@ function loadSlots() {
     });
 }
 
-// Initial Load
-// loadSlots(); // Do not load initially to force user to confirm/select
-
-function selectSlot(el, time) {
+window.selectSlot = function (el, time) {
     // Remove previous selection
     document.querySelectorAll('.time-slot.selected').forEach(d => d.classList.remove('selected'));
 
@@ -86,10 +94,10 @@ function selectSlot(el, time) {
     el.classList.add('selected');
     selectedTimeInput.value = time;
     timeError.style.display = 'none';
-}
+};
 
 // Form Submit
-bookingForm.addEventListener('submit', (e) => {
+bookingForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const serviceId = parseInt(serviceSelect.value);
@@ -103,6 +111,11 @@ bookingForm.addEventListener('submit', (e) => {
         alert("Por favor selecciona un horario.");
         return;
     }
+
+    const submitBtn = document.querySelector('#booking-form button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Procesando...';
+    submitBtn.disabled = true;
 
     try {
         const service = services.find(s => s.id === serviceId);
@@ -118,7 +131,7 @@ bookingForm.addEventListener('submit', (e) => {
             vehicle: { make, model, plate }
         };
 
-        const newApp = DB.createAppointment(appointmentData);
+        const newApp = await DB.createAppointment(appointmentData);
 
         // Show Success
         showSuccessModal(newApp);
@@ -130,6 +143,9 @@ bookingForm.addEventListener('submit', (e) => {
             loadSlots(); // Refresh UI
         }
         alert(err.message);
+    } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
     }
 });
 
@@ -138,7 +154,7 @@ function showSuccessModal(app) {
 
     // Generate QR
     qrContainer.innerHTML = '';
-    const qrText = `FOLIO:${app.id}|CLIENTE:${currentUser.name}|AUTO:${app.vehicle.make} ${app.vehicle.model}|FECHA:${app.date} ${app.time}`;
+    const qrText = `FOLIO:${app.id}|CLIENTE:${currentUser.name || currentUser.email}|AUTO:${app.vehicle.make} ${app.vehicle.model}|FECHA:${app.date} ${app.time}`;
     new QRCode(qrContainer, {
         text: qrText,
         width: 128,
@@ -148,8 +164,10 @@ function showSuccessModal(app) {
     successModal.style.display = 'flex';
 }
 
-function renderHistory() {
-    const apps = DB.getMyAppointments(currentUser.id);
+async function renderHistory() {
+    appointmentsList.innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size:0.9rem;">Cargando historial...</p>';
+
+    const apps = await DB.getMyAppointments(currentUser.id);
     appointmentsList.innerHTML = '';
 
     if (apps.length === 0) {

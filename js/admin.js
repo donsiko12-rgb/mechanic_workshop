@@ -1,11 +1,7 @@
-
-// Check Auth
-const currentUser = DB.getCurrentUser();
-if (!currentUser || currentUser.role !== 'admin') {
-    window.location.href = 'index.html';
-}
+import DB from './data.js';
 
 // DOM Elements
+const userNameSpan = document.getElementById('user-name');
 const tableBody = document.querySelector('#appointments-table tbody');
 const filterDateInput = document.getElementById('filter-date');
 const filterStatusInput = document.getElementById('filter-status');
@@ -16,24 +12,39 @@ const statToday = document.getElementById('stat-today');
 const statPending = document.getElementById('stat-pending');
 const statRevenue = document.getElementById('stat-revenue');
 
-// Init
+// Init Auth
+DB.initAuth((user) => {
+    if (!user || user.role !== 'admin') {
+        window.location.href = 'index.html';
+        return;
+    }
+
+    userNameSpan.textContent = user.name || "Administrador";
+
+    // Setup Listeners
+    filterDateInput.addEventListener('change', loadFilteredApps);
+    filterStatusInput.addEventListener('change', loadFilteredApps);
+
+    // Initial Load
+    loadFilteredApps();
+});
+
 const todayStr = new Date().toISOString().split('T')[0];
 filterDateInput.value = todayStr;
 
-// Setup Listeners
-filterDateInput.addEventListener('change', loadFilteredApps);
-filterStatusInput.addEventListener('change', loadFilteredApps);
-
-// Initial Load
-loadFilteredApps();
-
-function clearDate() {
+window.clearDate = function () {
     filterDateInput.value = todayStr;
     loadFilteredApps();
-}
+};
 
-function loadFilteredApps() {
-    const allApps = DB.getAllAppointments();
+window.loadAppointments = function () {
+    loadFilteredApps();
+};
+
+async function loadFilteredApps() {
+    tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Cargando citas...</td></tr>';
+
+    const allApps = await DB.getAllAppointments();
 
     // Filters
     const dateVal = filterDateInput.value;
@@ -74,7 +85,7 @@ function calculateTodayStats(allApps) {
     statRevenue.textContent = `$${revenue.toLocaleString()}`;
 }
 
-function renderTable(apps) {
+async function renderTable(apps) {
     tableBody.innerHTML = '';
 
     if (apps.length === 0) {
@@ -84,7 +95,7 @@ function renderTable(apps) {
     noDataMsg.style.display = 'none';
 
     // Need User List to map Client IDs to Names
-    const allUsers = DB.get(DB.KEYS.USERS);
+    const allUsers = await DB.getAllUsers();
 
     apps.forEach(app => {
         const tr = document.createElement('tr');
@@ -96,7 +107,7 @@ function renderTable(apps) {
 
         // Find Client
         const client = allUsers.find(u => u.id === app.clientId);
-        const clientName = client ? client.name : 'Usuario Desconocido';
+        const clientName = client ? (client.name || client.email) : 'Usuario Desconocido';
         const clientPhone = client ? (client.phone || '') : '';
         const vehicleStr = `${app.vehicle.make} ${app.vehicle.model} (${app.vehicle.plate})`;
 
@@ -139,14 +150,14 @@ function renderTable(apps) {
     });
 }
 
-function updateAppStatus(id, newStatus) {
+window.updateAppStatus = async function (id, newStatus) {
     if (confirm(`¿Cambiar estado a ${newStatus}?`)) {
-        DB.updateAppointmentStatus(id, newStatus);
+        await DB.updateAppointmentStatus(id, newStatus);
         loadFilteredApps();
     }
-}
+};
 
-function openQRModal(folio, client, vehicle, datetime) {
+window.openQRModal = function (folio, client, vehicle, datetime) {
     const container = document.getElementById('admin-qrcode');
     const modal = document.getElementById('qr-modal');
     const label = document.getElementById('qr-folio');
@@ -163,4 +174,4 @@ function openQRModal(folio, client, vehicle, datetime) {
 
     label.textContent = folio;
     modal.style.display = 'flex';
-}
+};
