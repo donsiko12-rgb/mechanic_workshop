@@ -32,16 +32,37 @@ const DB = {
             ]));
         }
 
-        if (!localStorage.getItem(DB.KEYS.USERS)) {
-            // Default Admin
-            const admin = {
+        // Initialize Users (Admin + Demo Client)
+        let users = DB.get(DB.KEYS.USERS) || [];
+        let usersChanged = false;
+
+        // Ensure Admin
+        if (!users.find(u => u.email === 'admin@autofix.com')) {
+            users.push({
                 id: "admin_01",
                 email: "admin@autofix.com",
-                password: "admin", // In real app, hash this!
+                password: "admin",
                 name: "Administrador",
                 role: "admin"
-            };
-            localStorage.setItem(DB.KEYS.USERS, JSON.stringify([admin]));
+            });
+            usersChanged = true;
+        }
+
+        // Ensure Demo Client
+        if (!users.find(u => u.email === 'cliente@demo.com')) {
+            users.push({
+                id: "client_demo",
+                email: "cliente@demo.com",
+                password: "123",
+                name: "Cliente Demo",
+                phone: "555-9999",
+                role: "client"
+            });
+            usersChanged = true;
+        }
+
+        if (usersChanged) {
+            DB.set(DB.KEYS.USERS, users);
         }
 
         if (!localStorage.getItem(DB.KEYS.APPOINTMENTS)) {
