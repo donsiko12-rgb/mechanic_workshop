@@ -82,5 +82,5 @@ window.toggleRegister = function () {
 // Demo Admin Helper
 window.fillAdmin = function () {
     emailInput.value = "admin@autofix.com";
-    passwordInput.value = "admin";
+    passwordInput.value = "admin123";
 };
