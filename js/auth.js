@@ -73,7 +73,7 @@ window.toggleRegister = function () {
         submitBtn.textContent = "Registrarse";
         toggleBtn.textContent = "¿Ya tienes cuenta? Iniciar Sesión";
     } else {
-        title.textContent = "AutoFix Manager";
+        title.innerHTML = "Taller Mecánico<br>El Toro";
         submitBtn.textContent = "Iniciar Sesión";
         toggleBtn.textContent = "Registrarse como Cliente";
     }
