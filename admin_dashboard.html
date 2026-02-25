@@ -141,6 +141,49 @@
                     </div>
                 </div>
 
+                <!-- Settings & Blocks -->
+                <div class="grid-2" style="margin-bottom:1.5rem;">
+                    <!-- Bloquear Fechas Card -->
+                    <div class="card" style="margin-bottom:0;">
+                        <h2 style="font-size:1.1rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i class="ph ph-calendar-x"></i> Bloquear Horarios / Días
+                        </h2>
+                        <form id="block-form" class="grid-2-sm" style="align-items:end;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label style="font-size:0.8rem;">Fecha</label>
+                                <input type="date" id="block-date"
+                                    style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius);"
+                                    required>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label style="font-size:0.8rem;">Hora</label>
+                                <select id="block-time"
+                                    style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius);"
+                                    required>
+                                    <option value="ALL">Todo el día</option>
+                                    <!-- Times injected via JS -->
+                                </select>
+                            </div>
+                            <div class="form-group" style="grid-column: 1 / -1; margin-bottom:0;">
+                                <label style="font-size:0.8rem;">Motivo (Opcional)</label>
+                                <input type="text" id="block-note" placeholder="Ej. Día Festivo / Comida"
+                                    style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius);">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block"
+                                style="grid-column: 1 / -1; padding:0.5rem;">Bloquear</button>
+                        </form>
+                    </div>
+
+                    <!-- Lista de Bloqueos -->
+                    <div class="card" style="margin-bottom:0; max-height: 250px; overflow-y:auto;">
+                        <h2 style="font-size:1.1rem; margin-bottom:1rem;">Días/Horas Bloqueadas</h2>
+                        <div id="blocks-list" style="display:flex; flex-direction:column; gap:0.5rem;">
+                            <!-- Blocks injected here -->
+                            <p style="text-align:center; font-size:0.9rem; color:var(--text-muted);">Cargando...</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Table -->
                 <div class="card" style="padding:0;">
                     <div class="table-responsive">

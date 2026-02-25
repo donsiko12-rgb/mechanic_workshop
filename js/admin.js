@@ -12,6 +12,13 @@ const statToday = document.getElementById('stat-today');
 const statPending = document.getElementById('stat-pending');
 const statRevenue = document.getElementById('stat-revenue');
 
+// Block Elements
+const blockForm = document.getElementById('block-form');
+const blockDate = document.getElementById('block-date');
+const blockTime = document.getElementById('block-time');
+const blockNote = document.getElementById('block-note');
+const blocksList = document.getElementById('blocks-list');
+
 // Init Auth
 DB.initAuth((user) => {
     if (!user || user.role !== 'admin') {
@@ -24,13 +31,18 @@ DB.initAuth((user) => {
     // Setup Listeners
     filterDateInput.addEventListener('change', loadFilteredApps);
     filterStatusInput.addEventListener('change', loadFilteredApps);
+    blockDate.addEventListener('change', populateBlockTimes);
+    blockForm.addEventListener('submit', handleBlockSubmit);
 
     // Initial Load
     loadFilteredApps();
+    loadBlocks();
 });
 
+// Configure min date for block form
 const todayStr = new Date().toISOString().split('T')[0];
 filterDateInput.value = todayStr;
+blockDate.min = todayStr;
 
 window.clearDate = function () {
     filterDateInput.value = todayStr;
@@ -165,7 +177,6 @@ window.openQRModal = function (folio, client, vehicle, datetime) {
     container.innerHTML = '';
     const qrText = `FOLIO:${folio}|CLIENTE:${client}|AUTO:${vehicle}|FECHA:${datetime}`;
 
-    // Using global QRCode library
     new QRCode(container, {
         text: qrText,
         width: 150,
@@ -174,4 +185,82 @@ window.openQRModal = function (folio, client, vehicle, datetime) {
 
     label.textContent = folio;
     modal.style.display = 'flex';
+};
+
+// --- SCHEDULE BLOCKS ---
+function populateBlockTimes() {
+    blockTime.innerHTML = '<option value="ALL">Todo el día</option>';
+    if (!blockDate.value) return;
+
+    const startMin = DB.timeToMinutes(DB.settings.openingTime);
+    const endMin = DB.timeToMinutes(DB.settings.closingTime);
+    const interval = DB.settings.slotInterval;
+
+    for (let time = startMin; time < endMin; time += interval) {
+        const timeStr = DB.minutesToTime(time);
+        blockTime.innerHTML += `<option value="${timeStr}">${timeStr}</option>`;
+    }
+}
+
+async function handleBlockSubmit(e) {
+    e.preventDefault();
+    const btn = blockForm.querySelector('button');
+    btn.disabled = true;
+    btn.textContent = "Bloqueando...";
+
+    try {
+        await DB.addBlockedSlot(blockDate.value, blockTime.value, blockNote.value);
+        blockForm.reset();
+        await loadBlocks();
+        alert("Horario bloqueado correctamente.");
+    } catch (err) {
+        alert("Error al bloquear: " + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "Bloquear";
+    }
+}
+
+async function loadBlocks() {
+    blocksList.innerHTML = '<p style="text-align:center; font-size:0.9rem; color:var(--text-muted);">Cargando...</p>';
+    const blocks = await DB.getBlockedSlots();
+    blocksList.innerHTML = '';
+
+    if (blocks.length === 0) {
+        blocksList.innerHTML = '<p style="text-align:center; font-size:0.9rem; color:var(--text-muted);">Sin bloqueos activos</p>';
+        return;
+    }
+
+    blocks.forEach(b => {
+        const div = document.createElement('div');
+        div.style.padding = '0.5rem';
+        div.style.border = '1px solid var(--border)';
+        div.style.borderRadius = 'var(--radius)';
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.alignItems = 'center';
+        div.style.fontSize = '0.85rem';
+
+        const info = `
+            <div>
+                <strong>${b.date}</strong> - ${b.time === 'ALL' ? '<span style="color:var(--danger)">Todo el día</span>' : b.time}
+                ${b.note ? `<br><span style="color:var(--text-muted)">${b.note}</span>` : ''}
+            </div>
+        `;
+
+        div.innerHTML = info + `
+            <button class="action-btn" style="color:var(--danger);" onclick="removeBlock('${b.id}')" title="Eliminar Bloqueo">
+                <i class="ph ph-trash" style="font-size:1.2rem;"></i>
+            </button>
+        `;
+
+        blocksList.appendChild(div);
+    });
+}
+
+window.removeBlock = async function (id) {
+    if (confirm('¿Eliminar este bloqueo?')) {
+        await DB.removeBlockedSlot(id);
+        loadBlocks();
+    }
 };

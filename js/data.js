@@ -15,7 +15,8 @@ import {
     query,
     where,
     orderBy,
-    updateDoc
+    updateDoc,
+    deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 
 /**
@@ -169,6 +170,21 @@ const DB = {
                 appointments.push(doc.data());
             });
 
+            // Get blocked slots for that day
+            const bq = query(collection(db, "blocked_slots"),
+                where("date", "==", dateStr)
+            );
+            const blockSnapshot = await getDocs(bq);
+            const blockedSlots = [];
+            blockSnapshot.forEach((doc) => {
+                blockedSlots.push(doc.data());
+            });
+
+            // If the whole day is blocked
+            if (blockedSlots.some(b => b.time === "ALL")) {
+                return [];
+            }
+
             const slots = [];
             const startMin = DB.timeToMinutes(DB.settings.openingTime);
             const endMin = DB.timeToMinutes(DB.settings.closingTime);
@@ -185,10 +201,24 @@ const DB = {
                     const appStart = DB.timeToMinutes(app.time);
                     const appEnd = appStart + app.duration;
 
-                    // Collision Logic: (StartA < EndB) and (EndA > StartB)
                     if (time < appEnd && endTime > appStart) {
                         isBooked = true;
                         break;
+                    }
+                }
+
+                // Check collision with specific blocked times
+                if (!isBooked) {
+                    for (const block of blockedSlots) {
+                        if (block.time !== "ALL") {
+                            const blockTimeMin = DB.timeToMinutes(block.time);
+                            // Assuming a block takes exactly 1 interval unit, or block whole service time.
+                            // Better yet, just check if starting time equals block time
+                            if (time <= blockTimeMin && endTime > blockTimeMin) {
+                                isBooked = true;
+                                break;
+                            }
+                        }
                     }
                 }
 
@@ -276,9 +306,45 @@ const DB = {
             await updateDoc(appRef, {
                 status: status
             });
-            return true;
         } catch (error) {
             console.error("Error updating status:", error);
+            return false;
+        }
+    },
+
+    // --- BLOCKED SLOTS ---
+    async getBlockedSlots() {
+        try {
+            const querySnapshot = await getDocs(collection(db, "blocked_slots"));
+            const blocks = [];
+            querySnapshot.forEach((doc) => {
+                blocks.push({ id: doc.id, ...doc.data() });
+            });
+            // Sort by date descending
+            return blocks.sort((a, b) => new Date(b.date) - new Date(a.date));
+        } catch (error) {
+            console.error("Error getting blocked slots:", error);
+            return [];
+        }
+    },
+
+    async addBlockedSlot(date, time, note) {
+        try {
+            const newBlock = { date, time, note, createdAt: new Date().toISOString() };
+            const docRef = await addDoc(collection(db, "blocked_slots"), newBlock);
+            return { id: docRef.id, ...newBlock };
+        } catch (error) {
+            console.error("Error adding blocked slot:", error);
+            throw error;
+        }
+    },
+
+    async removeBlockedSlot(id) {
+        try {
+            await deleteDoc(doc(db, "blocked_slots", id));
+            return true;
+        } catch (error) {
+            console.error("Error removing blocked slot:", error);
             return false;
         }
     },
