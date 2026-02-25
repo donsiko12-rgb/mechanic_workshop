@@ -98,7 +98,7 @@
             <div class="container" style="max-width: 1200px;">
 
                 <!-- Filters -->
-                <div class="card" style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+                <div class="card filters-row">
                     <div style="flex:1;">
                         <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Filtrar por
                             Fecha</label>
@@ -126,7 +126,7 @@
                 </div>
 
                 <!-- Stats -->
-                <div class="grid-2" style="grid-template-columns: repeat(3, 1fr); margin-bottom:1.5rem;">
+                <div class="grid-3" style="margin-bottom:1.5rem;">
                     <div class="card" style="padding:1rem; text-align:center;">
                         <h3 style="font-size:0.9rem; color:var(--text-muted);">Citas Hoy</h3>
                         <p id="stat-today" style="font-size:2rem; font-weight:700; color:var(--primary);">0</p>
@@ -143,7 +143,7 @@
 
                 <!-- Table -->
                 <div class="card" style="padding:0;">
-                    <div style="overflow-x:auto;">
+                    <div class="table-responsive">
                         <table id="appointments-table">
                             <thead>
                                 <tr>
